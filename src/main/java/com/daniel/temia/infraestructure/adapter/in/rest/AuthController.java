@@ -1,11 +1,14 @@
 package com.daniel.temia.infraestructure.adapter.in.rest;
 
+import com.daniel.temia.application.dto.auth.ActualizarPerfilRequest;
 import com.daniel.temia.application.dto.auth.LoginRequest;
 import com.daniel.temia.application.dto.auth.LoginResponse;
 import com.daniel.temia.application.dto.auth.RegisterRequest;
 import com.daniel.temia.application.dto.auth.RegisterResponse;
 import com.daniel.temia.application.dto.auth.UserInfo;
 import com.daniel.temia.domain.exception.ValidationException;
+import com.daniel.temia.domain.model.Usuario;
+import com.daniel.temia.domain.port.in.ActualizarPerfilUseCase;
 import com.daniel.temia.domain.port.in.GetCurrentUserUseCase;
 import com.daniel.temia.domain.port.in.LoginUseCase;
 import com.daniel.temia.domain.port.in.RegisterUseCase;
@@ -18,7 +21,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -38,6 +43,7 @@ public class AuthController {
     private final RegisterUseCase registerUseCase;
     private final LoginUseCase loginUseCase;
     private final GetCurrentUserUseCase getCurrentUserUseCase;
+    private final ActualizarPerfilUseCase actualizarPerfilUseCase;
 
     @Operation(
             summary = "Registra un nuevo usuario",
@@ -72,6 +78,19 @@ public class AuthController {
     public ResponseEntity<UserInfo> getCurrentUser(@RequestHeader("Authorization") String authHeader) {
         String token = authHeader.replace("Bearer ", "");
         UserInfo userInfo = getCurrentUserUseCase.getCurrentUser(token);
+        return ResponseEntity.ok(userInfo);
+    }
+
+    @Operation(summary = "Actualiza el perfil del usuario del token",
+            description = "Permite cambiar el nombre de usuario y, opcionalmente, la contraseña. "
+                    + "El email no se puede modificar. Requiere el header Authorization con el token Bearer.")
+    @SecurityRequirement(name = "bearerAuth")
+    @PatchMapping("/me")
+    public ResponseEntity<UserInfo> actualizarPerfil(
+            @AuthenticationPrincipal Usuario usuario,
+            @Valid @RequestBody ActualizarPerfilRequest actualizarPerfilRequest) {
+        UserInfo userInfo = actualizarPerfilUseCase.actualizarPerfil(
+                usuario.getId(), actualizarPerfilRequest);
         return ResponseEntity.ok(userInfo);
     }
 

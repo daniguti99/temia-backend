@@ -1,5 +1,6 @@
 package com.daniel.temia.application.service;
 
+import com.daniel.temia.application.dto.auth.ActualizarPerfilRequest;
 import com.daniel.temia.application.dto.auth.LoginRequest;
 import com.daniel.temia.application.dto.auth.LoginResponse;
 import com.daniel.temia.application.dto.auth.RegisterRequest;
@@ -9,6 +10,7 @@ import com.daniel.temia.domain.exception.BadRequestException;
 import com.daniel.temia.domain.exception.UnauthorizedException;
 import com.daniel.temia.domain.model.Role;
 import com.daniel.temia.domain.model.Usuario;
+import com.daniel.temia.domain.port.in.ActualizarPerfilUseCase;
 import com.daniel.temia.domain.port.in.GetCurrentUserUseCase;
 import com.daniel.temia.domain.port.in.LoginUseCase;
 import com.daniel.temia.domain.port.in.RegisterUseCase;
@@ -23,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-public class AuthService implements RegisterUseCase, LoginUseCase, GetCurrentUserUseCase {
+public class AuthService implements RegisterUseCase, LoginUseCase, GetCurrentUserUseCase, ActualizarPerfilUseCase {
 
     private final UsuarioRepositoryPort usuarioRepositoryPort;
     private final PasswordEncoder passwordEncoder;
@@ -103,6 +105,67 @@ public class AuthService implements RegisterUseCase, LoginUseCase, GetCurrentUse
         Usuario completo = usuarioRepositoryPort.buscarPorId(usuario.getId())
                 .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
         return mapToUserInfo(completo);
+    }
+
+    @Override
+    @Transactional
+    public UserInfo actualizarPerfil(Long usuarioId, ActualizarPerfilRequest request) {
+        Usuario usuario = usuarioRepositoryPort.buscarPorId(usuarioId)
+                .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
+
+        String username = request.getUsername() == null ? "" : request.getUsername().trim();
+        if (username.length() < 3 || username.length() > 50) {
+            throw new BadRequestException(
+                    "El nombre de usuario debe tener entre 3 y 50 caracteres");
+        }
+        if (!username.equalsIgnoreCase(usuario.getUsername())) {
+            usuarioRepositoryPort.buscarPorUsername(username)
+                    .filter(otro -> !otro.getId().equals(usuario.getId()))
+                    .ifPresent(otro -> {
+                        throw new BadRequestException("El nombre de usuario ya está en uso");
+                    });
+        }
+        usuario.setUsername(username);
+
+        actualizarPassword(usuario, request);
+
+        Usuario guardado = usuarioRepositoryPort.guardar(usuario);
+        return mapToUserInfo(guardado);
+    }
+
+    /**
+     * Cambia la contraseña solo cuando el usuario rellena algún campo de la sección.
+     * Los campos en blanco significan «no quiero cambiar la contraseña».
+     */
+    private void actualizarPassword(Usuario usuario, ActualizarPerfilRequest request) {
+        String actual = textoPlano(request.getCurrentPassword());
+        String nueva = textoPlano(request.getNewPassword());
+        String confirmacion = textoPlano(request.getConfirmPassword());
+
+        if (actual.isEmpty() && nueva.isEmpty() && confirmacion.isEmpty()) {
+            return;
+        }
+        if (actual.isEmpty()) {
+            throw new BadRequestException("Rellene la contraseña actual");
+        }
+        if (nueva.isEmpty()) {
+            throw new BadRequestException("Rellene la contraseña nueva");
+        }
+        if (nueva.length() < 8) {
+            throw new BadRequestException(
+                    "La contraseña nueva debe tener al menos 8 caracteres");
+        }
+        if (!nueva.equals(confirmacion)) {
+            throw new BadRequestException("Las contraseñas no coinciden");
+        }
+        if (!passwordEncoder.matches(actual, usuario.getPasswordHash())) {
+            throw new BadRequestException("La contraseña actual no es correcta");
+        }
+        usuario.setPasswordHash(passwordEncoder.encode(nueva));
+    }
+
+    private String textoPlano(String valor) {
+        return valor == null ? "" : valor;
     }
 
     private UserInfo mapToUserInfo(Usuario usuario) {
