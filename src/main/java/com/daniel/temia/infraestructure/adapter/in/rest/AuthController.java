@@ -6,6 +6,7 @@ import com.daniel.temia.application.dto.auth.LoginResponse;
 import com.daniel.temia.application.dto.auth.RegisterRequest;
 import com.daniel.temia.application.dto.auth.RegisterResponse;
 import com.daniel.temia.application.dto.auth.UserInfo;
+import com.daniel.temia.application.dto.common.ApiResponse;
 import com.daniel.temia.domain.exception.ValidationException;
 import com.daniel.temia.domain.model.Usuario;
 import com.daniel.temia.domain.port.in.ActualizarPerfilUseCase;
@@ -47,12 +48,12 @@ public class AuthController {
 
     @Operation(
             summary = "Registra un nuevo usuario",
-            description = "Devuelve 201 y el usuario creado. Recibe multipart/form-data con "
+            description = "Devuelve 201 con `ApiResponse<RegisterResponse>` (usuario creado y mensaje). Recibe multipart/form-data con "
                     + "la parte `data` (los campos del formulario en JSON) y la parte opcional "
                     + "`photo` con la foto de perfil (JPG, PNG o WEBP, máximo 2 MB). "
                     + "No requiere token.")
     @PostMapping(value = "/register", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<RegisterResponse> register(
+    public ResponseEntity<ApiResponse<RegisterResponse>> register(
             @Valid @RequestPart("data") RegisterRequest registerRequest,
             @RequestPart(value = "photo", required = false) MultipartFile photo) {
 
@@ -60,38 +61,55 @@ public class AuthController {
                 registerUseCase.register(registerRequest, toFotoPerfil(photo));
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(registerResponse);
+                .body(ApiResponse.<RegisterResponse>builder()
+                        .success(true)
+                        .message("Usuario registrado correctamente")
+                        .data(registerResponse)
+                        .build());
     }
 
-    @Operation(summary = "Inicia sesión", description = "Devuelve 201 con el token JWT. No requiere token previo.")
+    @Operation(summary = "Inicia sesión", description = "Devuelve 201 con `ApiResponse<LoginResponse>`: el token JWT, el usuario y un mensaje. No requiere token previo.")
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest loginRequest) {
+    public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest loginRequest) {
         LoginResponse loginResponse = loginUseCase.login(loginRequest);
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(loginResponse);
+                .body(ApiResponse.<LoginResponse>builder()
+                        .success(true)
+                        .message("Inicio de sesión correcto")
+                        .data(loginResponse)
+                        .build());
     }
 
-    @Operation(summary = "Devuelve el usuario del token", description = "Requiere el header Authorization con el token Bearer.")
+    @Operation(summary = "Devuelve el usuario del token", description = "Devuelve 200 con `ApiResponse<UserInfo>` y un mensaje. Requiere el header Authorization con el token Bearer.")
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/me")
-    public ResponseEntity<UserInfo> getCurrentUser(@RequestHeader("Authorization") String authHeader) {
+    public ResponseEntity<ApiResponse<UserInfo>> getCurrentUser(@RequestHeader("Authorization") String authHeader) {
         String token = authHeader.replace("Bearer ", "");
         UserInfo userInfo = getCurrentUserUseCase.getCurrentUser(token);
-        return ResponseEntity.ok(userInfo);
+        return ResponseEntity.ok(ApiResponse.<UserInfo>builder()
+                .success(true)
+                .message("Usuario obtenido correctamente")
+                .data(userInfo)
+                .build());
     }
 
     @Operation(summary = "Actualiza el perfil del usuario del token",
             description = "Permite cambiar el nombre de usuario y, opcionalmente, la contraseña. "
-                    + "El email no se puede modificar. Requiere el header Authorization con el token Bearer.")
+                    + "El email no se puede modificar. Devuelve 200 con `ApiResponse<UserInfo>` y un mensaje. "
+                    + "Requiere el header Authorization con el token Bearer.")
     @SecurityRequirement(name = "bearerAuth")
     @PatchMapping("/me")
-    public ResponseEntity<UserInfo> actualizarPerfil(
+    public ResponseEntity<ApiResponse<UserInfo>> actualizarPerfil(
             @AuthenticationPrincipal Usuario usuario,
             @Valid @RequestBody ActualizarPerfilRequest actualizarPerfilRequest) {
         UserInfo userInfo = actualizarPerfilUseCase.actualizarPerfil(
                 usuario.getId(), actualizarPerfilRequest);
-        return ResponseEntity.ok(userInfo);
+        return ResponseEntity.ok(ApiResponse.<UserInfo>builder()
+                .success(true)
+                .message("Perfil actualizado correctamente")
+                .data(userInfo)
+                .build());
     }
 
     /**

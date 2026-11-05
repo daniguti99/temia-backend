@@ -120,6 +120,7 @@ public class GlobalExceptionHandler {
     private ResponseEntity<ApiError> buildResponse(HttpStatus status, String message, HttpServletRequest request) {
         return ResponseEntity.status(status).body(
                 ApiError.builder()
+                        .success(false)
                         .timestamp(LocalDateTime.now())
                         .status(status.value())
                         .error(status.getReasonPhrase())

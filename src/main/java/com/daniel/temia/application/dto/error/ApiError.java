@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class ApiError {
+    private boolean success;
     private LocalDateTime timestamp;
     private int status;
     private String error;

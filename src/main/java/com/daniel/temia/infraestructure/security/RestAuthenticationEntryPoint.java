@@ -27,6 +27,7 @@ public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
                          HttpServletResponse response,
                          AuthenticationException authException) throws IOException {
         ApiError error = ApiError.builder()
+                .success(false)
                 .timestamp(LocalDateTime.now())
                 .status(HttpServletResponse.SC_UNAUTHORIZED)
                 .error("Unauthorized")
@@ -42,6 +43,7 @@ public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
     private String toJson(ApiError error) {
         return "{"
+                + "\"success\":" + error.isSuccess() + ","
                 + "\"timestamp\":\"" + escape(error.getTimestamp().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)) + "\","
                 + "\"status\":" + error.getStatus() + ","
                 + "\"error\":\"" + escape(error.getError()) + "\","
