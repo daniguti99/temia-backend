@@ -1,4 +1,4 @@
-package com.daniel.temia.infraestructure.adapter.out.ficheros;
+package com.daniel.temia.domain.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -6,6 +6,12 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Imagen de perfil que llega desde el cliente.
+ *
+ * <p>Vive en el dominio porque es el dato que cruza el puerto de almacenamiento; la
+ * forma de subirla o borrarla es responsabilidad del adaptador.</p>
+ */
 @Getter
 @Setter
 @Builder

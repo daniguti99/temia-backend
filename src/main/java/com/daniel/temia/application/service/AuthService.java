@@ -7,25 +7,31 @@ import com.daniel.temia.application.dto.auth.RegisterRequest;
 import com.daniel.temia.application.dto.auth.RegisterResponse;
 import com.daniel.temia.application.dto.auth.UserInfo;
 import com.daniel.temia.domain.exception.BadRequestException;
+import com.daniel.temia.domain.exception.ExternalServiceException;
 import com.daniel.temia.domain.exception.UnauthorizedException;
+import com.daniel.temia.domain.model.FotoPerfil;
 import com.daniel.temia.domain.model.Role;
 import com.daniel.temia.domain.model.Usuario;
+import com.daniel.temia.domain.port.in.ActualizarFotoPerfilUseCase;
 import com.daniel.temia.domain.port.in.ActualizarPerfilUseCase;
+import com.daniel.temia.domain.port.in.EliminarFotoPerfilUseCase;
 import com.daniel.temia.domain.port.in.GetCurrentUserUseCase;
 import com.daniel.temia.domain.port.in.LoginUseCase;
 import com.daniel.temia.domain.port.in.RegisterUseCase;
 import com.daniel.temia.domain.port.out.AlmacenFotoPort;
 import com.daniel.temia.domain.port.out.TokenProviderPort;
 import com.daniel.temia.domain.port.out.UsuarioRepositoryPort;
-import com.daniel.temia.infraestructure.adapter.out.ficheros.FotoPerfil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
-public class AuthService implements RegisterUseCase, LoginUseCase, GetCurrentUserUseCase, ActualizarPerfilUseCase {
+public class AuthService implements RegisterUseCase, LoginUseCase, GetCurrentUserUseCase,
+        ActualizarPerfilUseCase, ActualizarFotoPerfilUseCase, EliminarFotoPerfilUseCase {
 
     private final UsuarioRepositoryPort usuarioRepositoryPort;
     private final PasswordEncoder passwordEncoder;
@@ -131,6 +137,48 @@ public class AuthService implements RegisterUseCase, LoginUseCase, GetCurrentUse
 
         Usuario guardado = usuarioRepositoryPort.guardar(usuario);
         return mapToUserInfo(guardado);
+    }
+
+    @Override
+    @Transactional
+    public UserInfo actualizarFotoPerfil(Long usuarioId, FotoPerfil fotoPerfil) {
+        Usuario usuario = usuarioRepositoryPort.buscarPorId(usuarioId)
+                .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
+
+        String fotoAnterior = usuario.getFotoUrl();
+        String fotoNueva = almacenFotoPort.subirFoto(fotoPerfil);
+        if (fotoNueva == null || fotoNueva.isBlank()) {
+            throw new ExternalServiceException("No se pudo guardar la foto de perfil");
+        }
+
+        usuario.setFotoUrl(fotoNueva);
+        Usuario guardado = usuarioRepositoryPort.guardar(usuario);
+
+        if (fotoAnterior != null && !fotoAnterior.isBlank() && !fotoAnterior.equals(fotoNueva)) {
+            if (!almacenFotoPort.eliminarFoto(fotoAnterior)) {
+                log.warn("No se pudo eliminar la foto anterior del usuario {}", usuarioId);
+            }
+        }
+
+        return mapToUserInfo(guardado);
+    }
+
+    @Override
+    @Transactional
+    public UserInfo eliminarFotoPerfil(Long usuarioId) {
+        Usuario usuario = usuarioRepositoryPort.buscarPorId(usuarioId)
+                .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
+
+        String fotoAnterior = usuario.getFotoUrl();
+        if (fotoAnterior != null && !fotoAnterior.isBlank()) {
+            if (!almacenFotoPort.eliminarFoto(fotoAnterior)) {
+                log.warn("No se pudo eliminar la foto del almacenamiento del usuario {}", usuarioId);
+            }
+            usuario.setFotoUrl(null);
+            usuario = usuarioRepositoryPort.guardar(usuario);
+        }
+
+        return mapToUserInfo(usuario);
     }
 
     /**

@@ -7,13 +7,16 @@ import com.daniel.temia.application.dto.auth.RegisterRequest;
 import com.daniel.temia.application.dto.auth.RegisterResponse;
 import com.daniel.temia.application.dto.auth.UserInfo;
 import com.daniel.temia.application.dto.common.ApiResponse;
+import com.daniel.temia.domain.exception.BadRequestException;
 import com.daniel.temia.domain.exception.ValidationException;
+import com.daniel.temia.domain.model.FotoPerfil;
 import com.daniel.temia.domain.model.Usuario;
+import com.daniel.temia.domain.port.in.ActualizarFotoPerfilUseCase;
 import com.daniel.temia.domain.port.in.ActualizarPerfilUseCase;
+import com.daniel.temia.domain.port.in.EliminarFotoPerfilUseCase;
 import com.daniel.temia.domain.port.in.GetCurrentUserUseCase;
 import com.daniel.temia.domain.port.in.LoginUseCase;
 import com.daniel.temia.domain.port.in.RegisterUseCase;
-import com.daniel.temia.infraestructure.adapter.out.ficheros.FotoPerfil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,6 +26,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -34,6 +38,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.Locale;
+import java.util.Set;
 
 
 @RestController
@@ -41,10 +47,15 @@ import java.io.IOException;
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
+    private static final Set<String> TIPOS_IMAGEN =
+            Set.of("image/jpeg", "image/png", "image/webp");
+
     private final RegisterUseCase registerUseCase;
     private final LoginUseCase loginUseCase;
     private final GetCurrentUserUseCase getCurrentUserUseCase;
     private final ActualizarPerfilUseCase actualizarPerfilUseCase;
+    private final ActualizarFotoPerfilUseCase actualizarFotoPerfilUseCase;
+    private final EliminarFotoPerfilUseCase eliminarFotoPerfilUseCase;
 
     @Operation(
             summary = "Registra un nuevo usuario",
@@ -112,6 +123,45 @@ public class AuthController {
                 .build());
     }
 
+    @Operation(summary = "Actualiza la foto de perfil del usuario del token",
+            description = "Recibe multipart/form-data con la parte `photo` (JPG, PNG o WEBP, "
+                    + "máximo 2 MB) y devuelve 200 con `ApiResponse<UserInfo>` y el mensaje. "
+                    + "Requiere el header Authorization con el token Bearer.")
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping(value = "/me/photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<UserInfo>> actualizarFotoPerfil(
+            @AuthenticationPrincipal Usuario usuario,
+            @RequestPart("photo") MultipartFile photo) {
+        UserInfo userInfo = actualizarFotoPerfilUseCase.actualizarFotoPerfil(
+                usuario.getId(), toFotoPerfilValidada(photo));
+        return ResponseEntity.ok(ApiResponse.<UserInfo>builder()
+                .success(true)
+                .message("Foto de perfil actualizada correctamente")
+                .data(userInfo)
+                .build());
+    }
+
+    @Operation(summary = "Elimina la foto de perfil del usuario del token",
+            description = "Elimina la foto del almacenamiento y deja la foto a `null`. "
+                    + "La operación es idempotente: si el usuario no tenía foto responde "
+                    + "`200` con el mensaje informativo. Devuelve `200` con "
+                    + "`ApiResponse<UserInfo>` y un mensaje. Requiere el header "
+                    + "Authorization con el token Bearer.")
+    @SecurityRequirement(name = "bearerAuth")
+    @DeleteMapping("/me/photo")
+    public ResponseEntity<ApiResponse<UserInfo>> eliminarFotoPerfil(
+            @AuthenticationPrincipal Usuario usuario) {
+        UserInfo userInfo = eliminarFotoPerfilUseCase.eliminarFotoPerfil(usuario.getId());
+        String mensaje = userInfo.getPhoto() == null
+                ? "El perfil no tenía foto"
+                : "Foto de perfil eliminada correctamente";
+        return ResponseEntity.ok(ApiResponse.<UserInfo>builder()
+                .success(true)
+                .message(mensaje)
+                .data(userInfo)
+                .build());
+    }
+
     /**
      * Convierte la parte fotográfica del multipart en un value object de dominio.
      * Devuelve {@code null} cuando el cliente no ha enviado foto: es opcional.
@@ -130,5 +180,23 @@ public class AuthController {
         } catch (IOException e) {
             throw new ValidationException("No se pudo leer la foto de perfil enviada");
         }
+    }
+
+    /**
+     * Valida la foto del endpoint de perfil, donde la parte es obligatoria y el tipo
+     * debe ser una imagen admitida.
+     */
+    private FotoPerfil toFotoPerfilValidada(MultipartFile photo) {
+        FotoPerfil fotoPerfil = toFotoPerfil(photo);
+        if (fotoPerfil == null) {
+            throw new BadRequestException("La foto de perfil está vacía");
+        }
+
+        String contentType = fotoPerfil.getContentType();
+        if (contentType == null || !TIPOS_IMAGEN.contains(contentType.toLowerCase(Locale.ROOT))) {
+            throw new BadRequestException("La foto debe ser JPG, PNG o WEBP");
+        }
+
+        return fotoPerfil;
     }
 }

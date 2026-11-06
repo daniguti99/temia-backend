@@ -2,6 +2,7 @@ package com.daniel.temia.infraestructure.exception;
 
 import com.daniel.temia.application.dto.error.ApiError;
 import com.daniel.temia.domain.exception.BadRequestException;
+import com.daniel.temia.domain.exception.ExternalServiceException;
 import com.daniel.temia.domain.exception.NotFoundException;
 import com.daniel.temia.domain.exception.UnauthorizedException;
 import com.daniel.temia.domain.exception.ValidationException;
@@ -53,6 +54,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleValidationException(ValidationException ex, HttpServletRequest request) {
         log.warn("Validation: {} - {}", path(request), ex.getMessage());
         return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(ExternalServiceException.class)
+    public ResponseEntity<ApiError> handleExternalService(ExternalServiceException ex,
+                                                          HttpServletRequest request) {
+        log.warn("ExternalService: {} - {}", path(request), ex.getMessage());
+        return buildResponse(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
