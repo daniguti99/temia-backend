@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.LocalDateTime;
 import java.util.stream.Collectors;
@@ -113,6 +114,13 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
                 "Tipo de contenido no soportado. Para /api/auth/register usa multipart/form-data "
                         + "con la parte 'data' (JSON) y 'photo' opcional.", request);
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiError> handleNoResource(NoResourceFoundException ex,
+                                                     HttpServletRequest request) {
+        log.warn("NoResourceFound: {}", path(request));
+        return buildResponse(HttpStatus.NOT_FOUND, "Recurso no encontrado", request);
     }
 
     @ExceptionHandler(Exception.class)
